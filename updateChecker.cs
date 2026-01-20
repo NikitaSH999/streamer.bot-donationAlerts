@@ -1,19 +1,16 @@
-using System;
+﻿using System;
 using System.Net;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 
-
 ///----------------------------------------------------------------------------
-///   Module:     DonationAlertsIntegration
-///   Author:     play_code (https://twitch.tv/play_code)
-///   Email:      info@play-code.live
-///   Repository: https://github.com/play-code-live/streamer.bot-donationAlerts
+///   Module:     DonationAlerts Integration for Streamer.bot
+///   Repository: (set after publishing)
 ///----------------------------------------------------------------------------
 public class CPHInline
 {
-    private const double CurrentVersion = 0.7;
-    private const string RepoReleasesAPIEndpoint = "https://api.github.com/repos/play-code-live/streamer.bot-donationAlerts/releases?per_page=100";
+    private const string CurrentVersion = "2.0.0";
+    private const string DefaultRepoSlug = "";
 
     public bool IsUpdateAvailable()
     {
@@ -24,30 +21,49 @@ public class CPHInline
     {
         var newerVersion = GetNewerGitHubVersion(CurrentVersion);
         if (newerVersion != null)
-            CPH.SendMessage(string.Format("Доступно обновление интеграции с DonationAlerts. Версия {0} - {1}", newerVersion.TagName, newerVersion.HtmlUrl));
+            CPH.SendMessage(string.Format("DonationAlerts update available: {0} - {1}", newerVersion.TagName, newerVersion.HtmlUrl));
 
         return newerVersion != null;
     }
 
-    private GitHubReleaseResponse GetNewerGitHubVersion(double currentVersion)
+    private GitHubReleaseResponse GetNewerGitHubVersion(string currentVersion)
     {
-        var newer = FetchLatestGitHubVersion();
+        var repoSlug = GetRepoSlug();
+        if (string.IsNullOrWhiteSpace(repoSlug))
+        {
+            CPH.LogDebug("UpdateChecker: daUpdateRepo is empty; skipping");
+            return null;
+        }
+
+        var newer = FetchLatestGitHubVersion(repoSlug);
         if (newer == null)
             return null;
 
-        var numericVersion = Convert.ToDouble(newer.TagName.Substring(1).Replace('.', ','));
-        CPH.LogDebug("UpdateChecker: Latest version = " + newer.TagName + " ("+numericVersion.ToString()+")");
-        if (currentVersion >= numericVersion)
+        var current = ParseVersion(currentVersion);
+        var available = ParseVersion(newer.TagName);
+        if (current == null || available == null)
+            return null;
+
+        if (current >= available)
             return null;
 
         return newer;
     }
 
-    private GitHubReleaseResponse FetchLatestGitHubVersion()
+    private string GetRepoSlug()
+    {
+        var slug = CPH.GetGlobalVar<string>("daUpdateRepo");
+        if (!string.IsNullOrWhiteSpace(slug))
+            return slug.Trim();
+
+        return DefaultRepoSlug;
+    }
+
+    private GitHubReleaseResponse FetchLatestGitHubVersion(string repoSlug)
     {
         try
         {
-            var releases = GetGitHubReleaseVersionsAsync();
+            var releases = GetGitHubReleaseVersionsAsync(repoSlug);
             foreach (var release in releases)
             {
                 if (release.IsDraft || release.IsPreRelease)
@@ -61,19 +77,34 @@ public class CPHInline
         return null;
     }
 
-    private List<GitHubReleaseResponse> GetGitHubReleaseVersionsAsync()
+    private List<GitHubReleaseResponse> GetGitHubReleaseVersionsAsync(string repoSlug)
     {
         try
         {
             WebClient webClient = new WebClient();
-            webClient.Headers.Add("User-Agent", "StreamerBot DA Integration");
-            Uri uri = new Uri(RepoReleasesAPIEndpoint);
+            webClient.Headers.Add("User-Agent", "StreamerBot-DonationAlerts");
+            Uri uri = new Uri(string.Format("https://api.github.com/repos/{0}/releases?per_page=100", repoSlug));
             string releases = webClient.DownloadString(uri);
 
             return JsonConvert.DeserializeObject<List<GitHubReleaseResponse>>(releases);
         }
         catch (Exception) {}
         return new List<GitHubReleaseResponse>();
+    }
+
+    private Version ParseVersion(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return null;
+
+        string cleaned = input.Trim();
+        if (cleaned.StartsWith("v", StringComparison.OrdinalIgnoreCase))
+            cleaned = cleaned.Substring(1);
+
+        if (Version.TryParse(cleaned, out Version version))
+            return version;
+
+        return null;
     }
 
     private class GitHubReleaseResponse

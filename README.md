@@ -1,104 +1,155 @@
-# DonationAlerts для Streamer.bot
+﻿# DonationAlerts для Streamer.bot
 
-[![GitHub All Releases](https://img.shields.io/github/downloads/play-code-live/streamer.bot-donationAlerts/total.svg)](https://github.com/play-code-live/streamer.bot-donationAlerts/releases) [![GitHub release](https://img.shields.io/github/release/play-code-live/streamer.bot-donationAlerts.svg)](https://github.com/play-code-live/streamer.bot-donationAlerts/releases)
+Актуальная интеграция DonationAlerts для Streamer.bot с OAuth 2.0, автообновлением токенов и удобными аргументами для кастомных действий.
 
-Данный модуль является набором действий и комманд для интеграции с DonationAlerts.
+**Что уже есть**
+- Автоматическое подключение через браузер
+- Подписка на донаты и цели через Centrifugo WebSocket
+- Больше аргументов для действий (донат, цель, метаданные)
+- Чистые логи и мягкий реконнект
+- Настройки через глобальные переменные
 
-## Установка
+## Быстрый старт: подключение
 
-> **Важно!** Если у вас уже есть подключенная интеграция более старой версии, воспользуйтесь инструкцией по обновлению
+1. Создайте приложение в DonationAlerts.
 
-1. Загрузите свежую версию файла импорта **install.sb** со [страницы релизов](https://github.com/play-code-live/streamer.bot-donationAlerts/releases)
-2. Откройте Streamer.bot и нажмите кнопку Import
-3. Перетащите курсором мыши загруженный файл **install.sb** в область **Import String**, или скопируйте его содержимое и вставьте вручную
-4. Нажмите кнопку Import
-5. Перейдите на вкладку **Commands** и поставьте галочку **Enabled** у команд `!da_connect` и `!da_start`
-6. Перейдите в чат вашего канала и введите команду `!da_connect`. В браузере откроется страница для авторизации в DonationAlerts, после чего интеграция запуститься и подключится в автозагрузку
+   Откройте:
+   https://www.donationalerts.com/application/clients
 
-## Обновление
+2. Укажите URL перенаправления (Redirect URL).
 
-1. На вкладке **Actions** удалите следующие действия, при их наличии:
-   * `-- DonationAlerts Autorization`
-   * `-- DonationAlerts AutoStart`
-   * `-- DonationAlerts Background Watcher`
-   * `-- DonationAlerts Code`
-   * `-- DonationAlerts Enable Background Watcher`
-   * `-- DonationAlerts Get Socket Token`
-   * `-- DonationAlerts Init`
-2. Загрузите свежую версию файла импорта **update.sb** со [страницы релизов](https://github.com/play-code-live/streamer.bot-donationAlerts/releases)
-3. Перезагрузите Streamer.bot (необходимо для завершения процесса `-- DonationAlerts Background Watcher`)
-4. Откройте Streamer.bot и нажмите кнопку Import
-5. Перетащите курсором мыши загруженный файл **update.sb** в область **Import String**, или скопируйте его содержимое и вставьте вручную
-6. Нажмите кнопку Import
-7. Перезагрузите Streamer.bot или перейдите в чат вашего канала и введите команду `!da_start`. Если потребуется авторизация - введите `!da_connect`
+   По умолчанию интеграция использует:
 
-## Структура
+   ```
+   http://127.0.0.1:8554/donationalerts/callback/
+   ```
 
-Весь список команд можно поделить на две условные группы:
+   Если хотите другой адрес или порт, измените и в приложении, и в настройках ниже.
 
-### Служебные действия
+3. Заполните глобальные переменные в Streamer.bot.
 
-Все служебные действия размещены в группе **DonationAlerts** и имеют префикс `--DonationAlerts`. Все они плотно связаны друг с другом и не могут быть переименованны без нарушения работоспособности.
+   Минимум:
+   - `daClientId`
+   - `daClientSecret`
 
-> **Важно!** Не переименовывайте служебные действия! Они имеют высокую зависимость друг от друга
+4. Создайте действия в Streamer.bot.
 
-* `--DonationAlerts Code` - Содержит основной код интеграции, который вызывается посредством **Call C# Method** в Streamer.bot
-* `--DonationAlerts Authorization` - Основная логика авторизации в сервисе. Вызывается вводом команды `!da_connect`
-* `--DonationAlerts Enable Background Watcher` - Активирует действия `Init` и `Background Watcher` для работы интеграции и автоматического запуска.
-* `--DonationAlerts Background Watcher` - Фоновое действие, отслеживающее появление новых донатов. Всегда должно находиться в очереди. Для ручной постановки в очередь, введите команду `!da_start`
-* `--DonationAlerts Autostart` - Обеспечивает безопасный запуск кода отслеживания донатов
-* `--DonationAlerts Init` - Автоматически запускает код отслеживания донатов на запуске streamer.bot
+   Рекомендуемая схема:
+   - **DA | Connect** -> метод `Connect`
+   - **DA | Start** -> метод `Start` (запускать в фоне)
+   - **DA | Stop** -> метод `Stop`
 
-### Действия-обработчики
+5. Запустите **DA | Connect**.
 
-#### Обработчики доната
+   Откроется браузер. Завершите авторизацию.
 
-Действия обработчики редактируются пользователем, для достижения желаемого эффекта реакции на донат. Однако, они имеют строго заданный шаблон именования.
+6. Запустите **DA | Start**.
 
-Вся основная обработка донатов выполняется в действии `DonationHandler_Default`. Из него вы можете развести логику в зависимости от диапазонов сумм. Однако, для точной суммы, есть другой подход...
+   Это включит прослушивание донатов и целей.
 
-Если вы хотите обработать донат на конкретную сумму, вам необходимо создать действие `DonationHandler_SUM`, где вместо `SUM` вы указываете желаемое число.
+## Настройки (глобальные переменные)
 
-#### Финализирующий обработчик доната
+| Переменная | Что делает | По умолчанию |
+| --- | --- | --- |
+| `daClientId` | ID клиента (Client ID) из DonationAlerts | обязательно |
+| `daClientSecret` | Секрет клиента (Client Secret) из DonationAlerts | обязательно |
+| `daRedirectUrl` | URL перенаправления (Redirect URL) для OAuth | `http://127.0.0.1:8554/donationalerts/callback/` |
+| `daScopes` | Области доступа OAuth (scopes) | `oauth-user-show oauth-donation-subscribe oauth-goal-subscribe` |
+| `daAuthTimeoutSeconds` | Таймаут ожидания авторизации | `90` |
+| `daReconnectDelaySeconds` | Пауза между реконнектами | `5` |
+| `daMaxReconnectAttempts` | Лимит реконнектов (0 = бесконечно) | `0` |
+| `daDownloadAudio` | Скачивать аудио-сообщения | `true` |
+| `daUserAgent` | Заголовок User-Agent для запросов | `StreamerBot-DonationAlerts/2.0` |
+| `daUpdateRepo` | Репозиторий для обновлений (`owner/repo`) | пусто |
 
-Если у вас заведено множество обработчиков для конкретных сумм, и в конце каждого приходится выполнять дополнительные операции или вызывать Action'ы - вы можете реализовать общую логику в специальном экшене `DonationHandler_After`.
+Токены сохраняются автоматически:
+- `daAccessToken`
+- `daRefreshToken`
+- `daAccessTokenExpiresAt`
+- `daSocketToken`
+- `daUserId`
 
-`DonationHandler_After` выполняется в самом конце после любого другого обработчика доната, вне зависимости от того, был ли это `Default` обработчик или обработчик конкретной суммы.
+## Аргументы для обработчиков донатов
 
-#### Обработчик целей сбора
+Интеграция передает аргументы в действия, вызываемые при донате.
 
-Если вы используете цели сбора на DA и хотите использовать информацию об их прогрессе, вы можете воспользоваться ей через Action `DonationHandler_GoalHandler`. Он вызывается на каждом изменении прогресса цели сбора, а так же при ключевых изменениях целей: отключение, установка по-умолчанию и т.д.
+**Основные**
+- `daDonationId`
+- `daDonationName`
+- `daDonationUsername`
+- `daDonationMessageType` (`text` или `audio`)
+- `daDonationMessage`
+- `daDonationAmount`
+- `daDonationCurrency`
+- `daDonationIsShown`
+- `daDonationCreatedAt`
+- `daDonationShownAt`
+- `daDonationReason`
+- `daDonationSeq`
+- `daDonationRaw` (JSON)
 
-## Аргументы
+**Совместимость со старой версией**
+- `daName`
+- `daUsername`
+- `daType`
+- `daMessage`
+- `daAmount`
+- `daCurrency`
+- `daAmountConverted`
+- `daAudioUrl`
+- `daAudio` (путь к файлу, если `daDownloadAudio = true`)
 
-### Донат
+## Аргументы для обновлений целей
 
-Каждое обработанное событие доната сопровождается следующими аргументами:
+- `daGoalId`
+- `daGoalIsActive`
+- `daGoalIsDefault`
+- `daGoalTitle`
+- `daGoalCurrency`
+- `daGoalCurrent`
+- `daGoalTarget`
+- `daGoalReason`
+- `daGoalSeq`
+- `daGoalRaw` (JSON)
 
-| Аргумент             | Описание                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------ |
-| `daUsername`         | Имя пользователя. Не может быть пустым. В случаях анонимной поддержки подставляется значение Anonymous |
-| `daType`             | Тип сообщения в донате. Может принимать значения: `text` или `audio`                                   |
-| `daMessage`          | Если `daType == text`. Сообщение доната. Может быть пустым                                             |
-| `daAudio`            | Если `daType == audio`. Путь до файла с голосовым донатом                                              |
-| `daAmount`           | Сумма поддержки в валюте зрителя                                                                       |
-| `daCurrency`         | Выбранная для поддержки валюта                                                                         |
-| `daAmountConverteed` | Сумма поддержки в валюте аккаунта стримера                                                             |
+## Имена действий по умолчанию
 
-### Обновление цели
+Скрипт ищет эти действия в Streamer.bot:
 
-Каждое обработанное событие, изменяющее состояние целей сбора (включая отключение цели), сопровождается следующими аргументами:
+- `DonationHandler_Default`
+- `DonationHandler_GoalHandler`
+- `DonationHandler_After`
 
-| Аргумент         | Описание                                                |
-| ---------------- | ------------------------------------------------------- |
-| `daGoalIsActive` | Является ли цель активной. Принимает `False` или `True` |
-| `daGoalTitle`    | Заголовок цели сбора                                    |
-| `daGoalCurrency` | Основная валюта цели сбора                              |
-| `daGoalCurrent`  | Текущее значение прогресса цели сбора                   |
-| `daGoalTarget`   | Целевое значение                                        |
+Если хотите, добавьте действия с точной суммой доната:
 
-## Автор
+- `DonationHandler_100`
+- `DonationHandler_499.99`
 
-**play_code** <info@play-code.info>
+## Обновления
 
-https://twitch.tv/play_code
+Если хотите уведомления об обновлениях:
+
+1. Создайте действие **DA | Update Checker** с `updateChecker.cs`.
+2. Укажите репозиторий в `daUpdateRepo`, например:
+
+```
+my-org/streamerbot-donationalerts
+```
+
+## Если что-то не работает
+
+- Проверьте, что URL перенаправления совпадает в DonationAlerts и в `daRedirectUrl`.
+- Убедитесь, что **DA | Start** запущен в фоне.
+- Проверьте scopes в `daScopes`.
+- Если авторизация не проходит, снова запустите **DA | Connect**.
+
+---
+
+Основано на старой версии play_code и полностью обновлено по актуальной документации DonationAlerts и Streamer.bot.
+
+## Документация
+
+- https://www.donationalerts.com/apidoc
+- https://docs.streamer.bot/api
+- https://docs.streamer.bot/api/csharp
+
